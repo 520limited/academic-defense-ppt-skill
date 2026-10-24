@@ -1,0 +1,83 @@
+---
+name: academic-defense-ppt
+description: 学术答辩 PPT 全流程制作与交付技能。当用户需要"参照参考图片/资料制作答辩用 PPT/汇报 PPT"、"PPT 要求全元素可编辑、不能图片拼接"、"做好的 PPT 发到企业微信"、"根据正式报告生成演讲稿"时使用。覆盖完整链路：参考风格分析 → 大纲与时间分配 → Ardot 画布高密度信息图制作 → 质量验证 → PPTX 导出与校验 → 数据与正式报告核对 → 演讲稿 Word 生成 → 企业微信文件交付。
+agent_created: true
+---
+
+# 学术答辩 PPT 全流程（Ardot 信息图 → PPTX → 企业微信）
+
+本技能源自一次完整的实战流水线：用户提供参考风格图 + 内容资料（讲稿、实验数据 README、正式报告 docx），产出 22 页 16:9 高密度学术蓝信息图风格答辩 PPT（全部元素可编辑、零图片拼接）、一份与 PPT 逐页对应的 30 分钟演讲稿 Word 文档，并通过企业微信发送给用户。
+
+## 何时使用
+
+- 用户给出参考图片（如高校信息图风格 PPT 截图）并要求"完全参照该风格制作汇报 PPT"
+- 用户要求 PPT "所有元素可编辑，不得使用图片拼接"
+- 用户要求"做完发到我企业微信"
+- 用户要求"根据正式报告生成演讲稿"，且指定"所有数据以报告为准"
+
+## 总流程（8 个阶段）
+
+| 阶段 | 产出 | 关键工具 |
+| --- | --- | --- |
+| 0 需求确认 | 大纲与画幅确认 | AskUserQuestion（一次问清：大纲确认、16:9/4:3） |
+| 1 素材读取 | 结构化内容清单 | Read；报告 docx 用 `scripts/extract_docx_text.py` |
+| 2 大纲设计 | slide-outline.md | 逐页标题 + 布局 + 时间分配 + 风格规格 |
+| 3 画布制作 | 22 页 .ardot 设计稿 | 先读 `references/ardot-slides-recipe.md`，再 create_design + batch_edit |
+| 4 质量验证 | 布局问题清零 | capture_layout(problemsOnly) 每页；capture_screenshot 稀缺使用 |
+| 5 导出校验 | .pptx 本地文件 | export_nodes(pptx) → curl 下载 → `scripts/verify_pptx.py` |
+| 6 数据核对 | 核对结论 + 矛盾清单 | PPT 数字逐项对照报告；矛盾如实报告用户，不擅自统一 |
+| 7 演讲稿生成 | 演讲稿 .docx | 读 `references/data-audit-and-speech.md`，edsdk 建 doc 写入 |
+| 8 企业微信交付 | 用户收到文件 | 读 `references/wecom-delivery.md`，wecom-cli 三步走 |
+
+**按顺序执行；用户中途追加需求（如演讲稿）时，从对应阶段切入，但必须先做阶段 6 的数据核对。**
+
+## 阶段要点
+
+### 阶段 0：需求确认（一次问清，不反复追问）
+
+用一次 AskUserQuestion 确认：① 大纲/页数与时间分配是否认可（给出建议方案）；② 画幅 16:9（推荐）或 4:3。用户确认后不再就方案性问题反复打扰。
+
+### 阶段 1：素材读取
+
+- 讲稿类 markdown、README 数据表直接 Read。
+- 正式报告 docx：运行 `python scripts/extract_docx_text.py "<docx路径>" -o report_extract.txt`，得到含表格的全文，作为**数据唯一基准**。
+
+### 阶段 2：大纲设计
+
+产出 `slide-outline.md`，包含：Meta（主题/场景/风格/页数）、逐页大纲（页码、标题、内容要点、布局模式、是否含图表）、**时间分配表**（按语速 170 字/分钟核算，合计 = 演讲时长 − 2 分钟弹性）、视觉节奏说明。
+
+### 阶段 3：画布制作（先读配方再动手）
+
+**动手前必须完整阅读 `references/ardot-slides-recipe.md`**——其中包含学术蓝信息图的完整规格（配色、字体、组件系统、每页构建模式、图表绘制法）和 12 条实战铁律。违反任何一条铁律都会导致 batch_edit 报错或返工。
+
+### 阶段 4：质量验证
+
+- 每页完成后对单页 slide 节点跑 capture_layout（problemsOnly=true），修复 OUTSIDE_PARENT 溢出、文本重叠。
+- capture_screenshot 是稀缺资源：**每修复批次最多 2 次**，且必须在当批所有修复完成后一次性截取。截图仅作内部验证，不得作为交付物。
+
+### 阶段 5：导出与校验
+
+1. export_nodes：传入全部 slide 节点 ID，format=pptx，获得临时签名 URL。
+2. curl 下载到项目目录（URL 有时效，立即下载）。
+3. 运行 `python scripts/verify_pptx.py "<pptx路径>" --slides 22` 校验：页数、总文本节点数、图片素材数（全可编辑要求 media=0）、可传入 `--expect "关键词1" "关键词2"` 抽查关键内容。
+
+### 阶段 6：数据核对
+
+以报告提取文本为基准，逐项核对 PPT/演讲稿中的每个数字（环境配置、各组实验关键值、结论数字）。**发现口径矛盾（如报告写"三次重复"、README 写"5 次"）时：如实告知用户并建议修改报告，产出物中使用"重复测量多次"等稳妥表述规避，绝不擅自替用户统一口径。**
+
+### 阶段 7：演讲稿生成
+
+读 `references/data-audit-and-speech.md`：演讲稿结构模板（时间轴总览 + 逐页口播 + 备答速查表）、语速核算方法、edsdk 生成 Word 的确切命令。
+
+### 阶段 8：企业微信交付
+
+读 `references/wecom-delivery.md`：wecom-cli 前置检查 → media upload → identity whoami → message aibot send 三步命令与失败处理。注意：所有内部 ID（chat_id/media_id/userid）只用于调用，**最终回复中禁止出现**。
+
+## 通用铁律（所有阶段生效）
+
+1. **数据诚实**：所有定量结论必须有原始记录支撑；未实测的数值标注"待填充"，绝不编造。
+2. **全元素可编辑**：图表用 SVG 矢量几何 + 可编辑文本节点，禁用位图拼接；导出校验 media 数必须为 0。
+3. **绑定名唯一**：每次 batch_edit 使用全新绑定名前缀（如 p15cap、p15rc），绝不跨调用复用。
+4. **无 Unicode 符号图标**：文本节点禁用 ✓ ■ → 等 U+2300–27BF 字符，图标一律用 SVG frame 或组件。
+5. **截图稀缺**：capture_screenshot 每修复批次 ≤2 次，禁止增量循环截图。
+6. **ID 不外露**：企业微信等接口返回的内部标识不得出现在最终回复中，用可读名称指代。
