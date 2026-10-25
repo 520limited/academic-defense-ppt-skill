@@ -1,6 +1,6 @@
 # academic-defense-ppt-skill
 
-WorkBuddy Skill：学术答辩 PPT 全流程制作与交付。
+WorkBuddy Skill：学术答辩 PPT 全流程制作与交付。（个人自用分享）
 
 从一份完整的实战流水线沉淀而来，已参数化：用户提供参考风格图 + 内容资料（讲稿、实验数据、正式报告 docx），按指定的**演讲时长 T 分钟 / 页数 N**，一条链路产出：
 
