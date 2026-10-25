@@ -82,8 +82,10 @@ agent_created: true
 1. **导出前重排图层顺序**（复现模式必做，并行建页会导致层序乱序）：按目标顺序把第 i 页 M 到 index=i（升序处理，一次 batch_edit ≤25 ops），batch_read 核对名称序列。
 2. export_nodes：传入全部 slide 节点 ID，format=pptx，获得临时签名 URL。
 3. curl 下载到项目目录（URL 有时效，立即下载）。
-4. 运行 `python scripts/verify_pptx.py "<pptx路径>" --slides <N>` 校验：页数、总文本节点数、图片素材数（全可编辑要求 media=0）、可传入 `--expect "关键词1" "关键词2"` 抽查关键内容。
-5. 从 PPTX 反抽文本（zipfile + 正则 `<a:t>`）做页面顺序与关键数值回验。
+4. **对齐属性回填（关键，每次导出后必做）**：PPTX 导出会完整丢失全部段落的 algn/anchor——画布上所有 CENTER 文本导出后全部变左对齐。诊断：解包后 `re.findall(r'algn="(\w+)"', xml)` 为空即中招。修复：运行 `python scripts/fix_pptx_align.py "<pptx路径>" <各页结构JSONL>`——先对每页 slide batch_read(readDepth=-1) 拿树序结构，脚本按树序向 `<a:pPr>` 注入 algn（画布 TEXT 节点树序与 PPTX 每页 sp 顺序一一对应）。**重导后必须重跑**（幂等，可分页增量）。
+5. **画布侧对齐体检**：扫描"同框内 LEFT 与 CENTER 并存"的卡片（脚本判据见复现协议第 8 节），把标题统一为与说明文字一致的 CENTER；图表轴标签/柱顶数值/散点标注的手动 LEFT 保留。
+6. 运行 `python scripts/verify_pptx.py "<pptx路径>" --slides <N>` 校验：页数、总文本节点数、图片素材数（全可编辑要求 media=0）、可传入 `--expect "关键词1" "关键词2"` 抽查关键内容。
+7. 从 PPTX 反抽文本（zipfile + 正则 `<a:t>`）做页面顺序与关键数值回验。
 
 ### 阶段 6：数据核对
 
